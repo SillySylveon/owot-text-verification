@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OWOT Text Signatures
 // @namespace    https://ourworldoftext.com/
-// @version      0.0.2
+// @version      0.0.3
 // @description  Sign and verify text written on the canvas.
 // @author       You
 // @match        http*://ourworldoftext.com/*
@@ -14,7 +14,7 @@
 (async function() {
     'use strict';
 
-    var VERSION = '0.0.2';
+    var VERSION = '0.0.3';
 
     function parseSemanticVersion(str) {
         if (/^\d+\.\d+\.\d+.*/g.test(str)) {
@@ -85,7 +85,7 @@
             keys = GM_getValue('keys', '');
             dbs = GM_getValue('dbs', '/sylveon/keys');
         } else if (id === 0) {
-            if (confirm('Are you sure you would like to change your key pairs? This cannot be undone.')) {
+            if (keyPair.private === null || keyPair.public === null || confirm('Are you sure you would like to change your key pairs? This cannot be undone.')) {
                 keyPair = {
                     "private": privateTxt.value,
                     "public": publicTxt.value
@@ -451,21 +451,20 @@
     };
 
     async function updateAllDbs() {
-        const tmp_db = {};
+        const tmp_db = keys.split('\n').filter(a=>a.length>0);
         const dbs2 = dbs.split('\n');
         for (let i in dbs2) {
             var db = await fetch_db(dbs2[i]);
             delete db[db.length-1];
             for (let k in db) {
-                tmp_db[db[k].user] = db[k].key;
+                const append = JSON.stringify({"user":db[k].user,"key":db[k].key});
+                if (!tmp_db.includes(append)) {
+                    tmp_db.push(append);
+                }
             }
         }
-        const tmp_db_2 = [];
-        for (let i in tmp_db) {
-            tmp_db_2.push(JSON.stringify({"user":i,"key":tmp_db[i]}))
-        }
-        GM_setValue('keys', tmp_db_2.join('\n'));
-        keys = tmp_db_2.join('\n');
+        GM_setValue('keys', tmp_db.join('\n'));
+        keys = tmp_db.join('\n');
         keys_elem.value = keys;
         GM_setValue('lastFetch', Date.now());
     };
