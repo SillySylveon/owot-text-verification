@@ -218,7 +218,6 @@
                 const offsetX = str.split('\n')[y].indexOf(k);
                 for (let l = offsetX; l < k.length + offsetX; l++) {
                     const cX = l + startX, cY = y + startY;
-                    console.log(str.split('\n')[y]);
                     const tileX = Math.floor(cX / 16), tileY = Math.floor(cY / 8), charX = cX - tileX * 16, charY = cY - tileY * 8;
 
                     queue.push([{
