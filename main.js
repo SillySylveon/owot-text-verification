@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OWOT Text Signatures
 // @namespace    https://ourworldoftext.com/
-// @version      0.0.0
+// @version      0.0.1
 // @description  Sign and verify text written on the canvas.
 // @author       You
 // @match        http*://ourworldoftext.com/*
@@ -14,7 +14,7 @@
 (async function() {
     'use strict';
 
-    var VERSION = '0.0.0';
+    var VERSION = '0.0.1';
 
     function parseSemanticVersion(str) {
         if (/^\d+\.\d+\.\d+.*/g.test(str)) {
@@ -218,6 +218,7 @@
                 const offsetX = str.split('\n')[y].indexOf(k);
                 for (let l = offsetX; l < k.length + offsetX; l++) {
                     const cX = l + startX, cY = y + startY;
+                    console.log(str.split('\n')[y]);
                     const tileX = Math.floor(cX / 16), tileY = Math.floor(cY / 8), charX = cX - tileX * 16, charY = cY - tileY * 8;
 
                     queue.push([{
@@ -465,6 +466,7 @@
         }
         GM_setValue('keys', tmp_db_2.join('\n'));
         keys = tmp_db_2.join('\n');
+        keys_elem.innerText = keys;
         GM_setValue('lastFetch', Date.now());
     };
 
