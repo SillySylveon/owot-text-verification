@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OWOT Text Signatures
 // @namespace    https://ourworldoftext.com/
-// @version      0.0.3
+// @version      0.1.0
 // @description  Sign and verify text written on the canvas.
 // @author       You
 // @match        http*://ourworldoftext.com/*
@@ -14,7 +14,15 @@
 (async function() {
     'use strict';
 
-    var VERSION = '0.0.3';
+    var VERSION = '0.0.4';
+
+    if (typeof GM_getValue === "undefined") {
+        alert('This script must be executed with a userscript manager (e.g. Tampermonkey).');
+        return;
+    }
+    if (typeof unsafeWindow.w === "undefined") {
+        return;
+    }
 
     function parseSemanticVersion(str) {
         if (/^\d+\.\d+\.\d+.*/g.test(str)) {
@@ -44,7 +52,7 @@
         if (latestVersion.major > currentVersion.major) {
             type = '<i>major</i> update';
         } else if (latestVersion.minor > currentVersion.minor) {
-            type = '<i>minor</i> update';
+            type = '<i>feature</i> update';
         } else if (latestVersion.bugfix > currentVersion.bugfix) {
             type = '<i>bug fix</i>';
         }
@@ -77,23 +85,6 @@
     ui.addTab(3, 'Verify text');
     ui.addTab(0, 'Your keys');
     ui.addTab(1, 'Options');
-    ui.submitFn = function() {
-        var id = ui.getCurrentTabId();
-        if (id === 1) {
-            GM_setValue('keys', keys_elem.value);
-            GM_setValue('dbs', dbs_elem.value);
-            keys = GM_getValue('keys', '');
-            dbs = GM_getValue('dbs', '/sylveon/keys');
-        } else if (id === 0) {
-            if (keyPair.private === null || keyPair.public === null || confirm('Are you sure you would like to change your key pairs? This cannot be undone.')) {
-                keyPair = {
-                    "private": privateTxt.value,
-                    "public": publicTxt.value
-                };
-                GM_setValue('keyPair', JSON.stringify(keyPair));
-            }
-        }
-    };
     var submit = ui.client.querySelector('button').parentElement;
     ui.focusTab(1);
     var div = document.createElement('div');
@@ -139,12 +130,6 @@
         privateTxt.value = toHex(await s.exportKey('pkcs8', tmpKey.privateKey));
         publicTxt.value = toHex(await s.exportKey('raw', tmpKey.publicKey));
     };
-    ui.onTabChange(function() {
-        privateTxt.value = '';
-        setTimeout(() => {
-            ui.client.querySelector('.submitarea').appendChild(submit);
-        }, 0);
-    });
     ui.onClose(function() {
         privateTxt.value = '';
     });
@@ -218,7 +203,6 @@
                 const offsetX = str.split('\n')[y].indexOf(k);
                 for (let l = offsetX; l < k.length + offsetX; l++) {
                     const cX = l + startX, cY = y + startY;
-                    console.log(str.split('\n')[y]);
                     const tileX = Math.floor(cX / 16), tileY = Math.floor(cY / 8), charX = cX - tileX * 16, charY = cY - tileY * 8;
 
                     queue.push([{
@@ -249,7 +233,7 @@
     };
     ui.focusTab(3);
     var div4 = document.createElement('div');
-    div4.innerHTML = `<div>Text:</div>
+    div4.innerHTML = `<div class="manual_entry"><div>Text:</div>
 <textarea id="text_verify" style="width: 100%; height: 100px"></textarea>
 <br>
 <div>Signature:</div>
@@ -257,11 +241,11 @@
 <br>
 <div>Hash:</div>
 <textarea id="hash_verify" style="width: 100%; height: 50px"></textarea>
-<br>
-<div id="status_verify"></div>
+<br></div>
+<div id="status_verify"></div><div class="manual_entry">
 <br>
 <button id="verify_btn">Verify text</button> or <button id="verify_select_btn">Use from selection (recommended)</button>
-<br><br><hr><br>
+<br></div><br><hr><br>
 <div class="submitarea"></div>`;
     ui.client.insertBefore(div4, ui.client.children[0]);
     div4.querySelector('#verify_btn').onclick = async function() {
@@ -293,6 +277,7 @@
         }
     };
     div4.querySelector('#verify_select_btn').onclick = async function() {
+        div4.querySelectorAll('.manual_entry').forEach(a=>{a.setAttribute('style', 'display: none')});
         ui.close();
         var verifySelection = new unsafeWindow.RegionSelection();
         verifySelection.onselection(async function(coordA, coordB) {
@@ -390,6 +375,73 @@
         verifySelection.startSelection();
     }
     ui.focusTab(2);
+    ui.submitFn = async function() {
+        var id = ui.getCurrentTabId();
+        if (id === 1) {
+            GM_setValue('keys', keys_elem.value);
+            GM_setValue('dbs', dbs_elem.value);
+            keys = GM_getValue('keys', '');
+            dbs = GM_getValue('dbs', '/sylveon/keys');
+        } else if (id === 0) {
+            let keyPairTmp = {
+                "private": privateTxt.value.length < 1 ? keyPair.private : privateTxt.value,
+                "public": publicTxt.value
+            };
+            if ((keyPairTmp.public !== keyPair.public || keyPairTmp.private !== keyPair.private) && (keyPair.private === null || keyPair.public === null || confirm('Are you sure you would like to change your key pairs? This cannot be undone.'))) {
+                if (!(/^[a-f0-9]{64}$/g.test(keyPairTmp.public)) || !(/^30[0-9a-f]{2}02010030[0-9a-f]{2}06032b657004[0-9a-f]{2}0420(.{64})/g.test(keyPairTmp.private))) {
+                    alert(`Error setting key: Key is invalid`);
+                    return;
+                }
+                keyPair = keyPairTmp;
+                let tmpPublic = keyPair.public;
+                GM_setValue('keyPair', JSON.stringify(keyPair));
+                const dbs2 = dbs.split('\n');
+                for (let i in dbs2) {
+                    let world = dbs2[i];
+                    if (!world.startsWith('/')) {
+                        world = '/' + world;
+                    }
+                    if (!world.endsWith('/')) {
+                        world += '/';
+                    }
+                    let tmpWs = new WebSocket('wss://ourworldoftext.com'+world+'ws/');
+                    tmpWs.onopen = function() {
+                        tmpWs.send(JSON.stringify({"kind":"chat","nickname":unsafeWindow.YourWorld.Nickname,"message":tmpPublic,"location":"page","color":"#000000"}));
+                    };
+
+                    let msgData;
+                    let msgDeleted = false;
+                    let isClosed = false;
+                    tmpWs.onmessage = function(data) {
+                        let msg = JSON.parse(data.data);
+                        if (msg.kind === 'chat' && msg.realUsername === unsafeWindow.state.userModel.username && msg.message === tmpPublic) {
+                            msgData = {id: msg.id, time: msg.date};
+                        } else if (msg.kind === 'chatdelete') {
+                            if (typeof msgData !== "undefined" && msg.id === msgData.id && msg.time === msgData.time) {
+                                tmpWs.close();
+                                isClosed = true;
+                            }
+                        }
+                    }
+                    setTimeout(() => {
+                        if (!isClosed) {
+                            tmpWs.close();
+                        }
+                    }, 30000);
+                }
+            }
+        }
+        div4.querySelector('#status_verify').innerHTML = '';
+        div4.querySelectorAll('.manual_entry').forEach(a=>{a.removeAttribute('style')});
+    };
+    ui.onTabChange(function() {
+        div4.querySelector('#status_verify').innerHTML = '';
+        div4.querySelectorAll('.manual_entry').forEach(a=>{a.removeAttribute('style')});
+        privateTxt.value = '';
+        setTimeout(() => {
+            ui.client.querySelector('.submitarea').appendChild(submit);
+        }, 0);
+    });
 
     var keys_elem = div.querySelector('#key');
     var dbs_elem = div.querySelector('#db');
@@ -454,13 +506,17 @@
         const tmp_db = keys.split('\n').filter(a=>a.length>0);
         const dbs2 = dbs.split('\n');
         for (let i in dbs2) {
-            var db = await fetch_db(dbs2[i]);
-            delete db[db.length-1];
-            for (let k in db) {
-                const append = JSON.stringify({"user":db[k].user,"key":db[k].key});
-                if (!tmp_db.includes(append)) {
-                    tmp_db.push(append);
+            try {
+                var db = await fetch_db(dbs2[i]);
+                delete db[db.length-1];
+                for (let k in db) {
+                    const append = JSON.stringify({"user":db[k].user,"key":db[k].key});
+                    if (!tmp_db.includes(append)) {
+                        tmp_db.push(append);
+                    }
                 }
+            } catch (e) {
+                console.warn(`Database ${dbs2[i]} failed to fetch: ${e}`);
             }
         }
         GM_setValue('keys', tmp_db.join('\n'));
