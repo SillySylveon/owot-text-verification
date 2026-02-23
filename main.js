@@ -14,7 +14,7 @@
 (async function() {
     'use strict';
 
-    var VERSION = '0.0.4';
+    var VERSION = '0.1.0';
 
     if (typeof GM_getValue === "undefined") {
         alert('This script must be executed with a userscript manager (e.g. Tampermonkey).');
