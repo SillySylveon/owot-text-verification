@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OWOT Text Signatures
 // @namespace    https://ourworldoftext.com/
-// @version      0.2.1
+// @version      0.2.2
 // @description  Sign and verify text written on the canvas.
 // @author       You
 // @match        http*://ourworldoftext.com/*
@@ -14,7 +14,7 @@
 (async function() {
     'use strict';
 
-    var VERSION = '0.2.1';
+    var VERSION = '0.2.2';
 
     if (typeof GM_getValue === "undefined") {
         alert('This script must be executed with a userscript manager (e.g. Tampermonkey).');
@@ -57,7 +57,7 @@
             type = '<i>bug fix</i>';
         }
         if (type !== '') {
-            unsafeWindow.w.doAnnounce(`New ${type} found OWOT Text Signatures v${lV.trim()}. <a href="${base_url}main.user.js">Click here to update.</a>`, 'textSignaturesUpdateBanner');
+            unsafeWindow.w.doAnnounce(`New ${type} found: OWOT Text Signatures v${lV.trim()}. <a href="${base_url}main.user.js">Click here to update.</a>`, 'textSignaturesUpdateBanner');
         }
     }
     var base_url = 'https://raw.githubusercontent.com/SillySylveon/owot-text-verification/refs/heads/main/';
