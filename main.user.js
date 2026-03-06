@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OWOT Text Signatures
 // @namespace    https://ourworldoftext.com/
-// @version      0.2.2
+// @version      0.2.3
 // @description  Sign and verify text written on the canvas.
 // @author       You
 // @match        http*://ourworldoftext.com/*
@@ -14,7 +14,7 @@
 (async function() {
     'use strict';
 
-    var VERSION = '0.2.2';
+    var VERSION = '0.2.3';
 
     if (typeof GM_getValue === "undefined") {
         alert('This script must be executed with a userscript manager (e.g. Tampermonkey).');
@@ -124,7 +124,6 @@
     var generatePassBtn = div2.querySelector('#generate_password');
     var privateTxt = div2.querySelector('#private_key');
     var publicTxt = div2.querySelector('#public_key');
-    var privateArea = div2.querySelector('#private_area');
     publicTxt.value = keyPair.public ?? '';
     generateBtn.onclick = async function() {
         const tmpKey = await s.generateKey("Ed25519", true, ["sign", "verify"]);
@@ -278,8 +277,8 @@
     };
     ui.focusTab(3);
     var div4 = document.createElement('div');
-    div4.innerHTML = `<div class="manual_entry"><div>Text:</div>
-<textarea id="text_verify" style="width: 100%; height: 100px"></textarea>
+    div4.innerHTML = `<div>Text:</div>
+<textarea id="text_verify" style="width: 100%; height: 100px"></textarea><div class="manual_entry">
 <br>
 <div>Signature:</div>
 <textarea id="signature_verify" style="width: 100%; height: 50px"></textarea>
