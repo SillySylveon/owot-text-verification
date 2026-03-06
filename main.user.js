@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OWOT Text Signatures
 // @namespace    https://ourworldoftext.com/
-// @version      0.2.3
+// @version      0.2.4
 // @description  Sign and verify text written on the canvas.
 // @author       You
 // @match        http*://ourworldoftext.com/*
@@ -14,7 +14,7 @@
 (async function() {
     'use strict';
 
-    var VERSION = '0.2.3';
+    var VERSION = '0.2.4';
 
     if (typeof GM_getValue === "undefined") {
         alert('This script must be executed with a userscript manager (e.g. Tampermonkey).');
@@ -45,24 +45,26 @@
         return Uint8Array.from((data.match(/.{2}/g) ?? []).map(a=>parseInt(a, 16))).buffer;
     }
     function checkVersion() {
-        var lV = GM_getValue('latestVersion', VERSION);
-        var latestVersion = parseSemanticVersion(lV);
-        var currentVersion = parseSemanticVersion(VERSION);
+        const lV = GM_getValue('latestVersion', VERSION);
+        const latestVersion = parseSemanticVersion(lV);
+        const currentVersion = parseSemanticVersion(VERSION);
         let type = '';
-        if (latestVersion.major > currentVersion.major) {
-            type = '<i>major</i> update';
-        } else if (latestVersion.minor > currentVersion.minor) {
-            type = '<i>feature</i> update';
-        } else if (latestVersion.bugfix > currentVersion.bugfix) {
-            type = '<i>bug fix</i>';
+        const keyMap = ['major', 'minor', 'bugfix'];
+        const typeVals = ['<i>major</i> update', '<i>feature</i> update', '<i>bug fix</i>'];
+        const diff = Array(3).fill(0).map((a, b) => latestVersion[keyMap[b]] - currentVersion[keyMap[b]]);
+        for (let i = 0; i < 3; i++) {
+            if (diff[i] > 0) {
+                type = typeVals[i];
+                break;
+            }
         }
         if (type !== '') {
-            unsafeWindow.w.doAnnounce(`New ${type} found: OWOT Text Signatures v${lV.trim()}. <a href="${base_url}main.user.js">Click here to update.</a>`, 'textSignaturesUpdateBanner');
+            w.doAnnounce(`New ${type} found: OWOT Text Signatures v. <a href="${''}main.user.js">Click here to update.</a>`, 'textSignaturesUpdateBanner');
         }
     }
     var base_url = 'https://raw.githubusercontent.com/SillySylveon/owot-text-verification/refs/heads/main/';
-    var lastUpdate = GM_getValue('lastUpdate', Date.now());
-    if (lastUpdate > 1000 * 60 * 5) {
+    var lastUpdate = GM_getValue('lastUpdate', 0);
+    if (Date.now() - lastUpdate > 1000 * 60 * 5) {
         fetch(base_url + 'VERSION.txt').then(r=>r.text()).then(lV => {
             GM_setValue('latestVersion', lV);
             GM_setValue('lastUpdate', Date.now());
@@ -71,8 +73,6 @@
             checkVersion();
             GM_setValue('lastUpdate', Date.now());
         });
-    } else {
-        checkVersion();
     }
     var s = crypto.subtle;
     var keyPair = JSON.parse(GM_getValue('keyPair', '{"private":null,"public":null}'));
