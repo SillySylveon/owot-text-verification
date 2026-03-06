@@ -59,7 +59,7 @@
             }
         }
         if (type !== '') {
-            w.doAnnounce(`New ${type} found: OWOT Text Signatures v. <a href="${''}main.user.js">Click here to update.</a>`, 'textSignaturesUpdateBanner');
+            unsafeWindow.w.doAnnounce(`New ${type} found: OWOT Text Signatures v. <a href="${''}main.user.js">Click here to update.</a>`, 'textSignaturesUpdateBanner');
         }
     }
     var base_url = 'https://raw.githubusercontent.com/SillySylveon/owot-text-verification/refs/heads/main/';
