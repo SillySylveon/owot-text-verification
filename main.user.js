@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OWOT Text Signatures
 // @namespace    https://ourworldoftext.com/
-// @version      1.0.0
+// @version      1.0.1
 // @description  Sign and verify text written on the canvas.
 // @author       You
 // @match        http*://ourworldoftext.com/*
@@ -14,7 +14,7 @@
 (async function() {
     'use strict';
 
-    var VERSION = '1.0.0';
+    var VERSION = '1.0.1';
 
     if (typeof GM_getValue === "undefined") {
         alert('This script must be executed with a userscript manager (e.g. Tampermonkey).');
@@ -378,7 +378,7 @@
 								return;
 							};
 						} else if (link.url.match(/^note:Signed by .{1,30}\: [A-Za-z0-9\-_]{6}.+/g) !== null) {
-							user_name = link.url.match(/(?<=^note:Signed by ).{1,30}(?=\: [A-Za-z0-9\-_]{6}.+)/g);
+							user_name = link.url.match(/(?<=^note:Signed by ).{1,30}(?=\: [A-Za-z0-9\-_]{6}.+)/g)[0];
                             const dd = link.url.match(/(?<=^note:Signed by .{1,30}\: )[A-Za-z0-9\-_]{4}/g)[0];
 							let id = link.url.match(/(?<=^note:Signed by .{1,30}\: [A-Za-z0-9\-_]{4})[A-Za-z0-9\-_]{2}/g)[0];
 							const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'.split('');
