@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OWOT Text Signatures
 // @namespace    https://ourworldoftext.com/
-// @version      1.0.1
+// @version      1.1.0
 // @description  Sign and verify text written on the canvas.
 // @author       You
 // @match        http*://ourworldoftext.com/*
@@ -14,7 +14,7 @@
 (async function() {
     'use strict';
 
-    var VERSION = '1.0.1';
+    var VERSION = '1.1.0';
 
     if (typeof GM_getValue === "undefined") {
         alert('This script must be executed with a userscript manager (e.g. Tampermonkey).');
@@ -359,12 +359,17 @@
             let meta_tmp = {};
 			let legacy = false;
             let user_name = null;
+            let hashbrown = false;
+            let hashbrown_override = false;
+            let hashbrown_meta = [];
+            let hashbrown_text = [];
             for (let y = startY; y <= endY; y++) {
                 for (let x = startX; x <= endX; x++) {
                     const link = unsafeWindow.getLinkXY(x, y);
                     if (link !== null && link.type === 'url') {
 						if (link.url.match(/^note:Signed text - \d{1,4}\|[A-Za-z0-9+\/=]+$/g) !== null) {
 							legacy = true;
+                            hashbrown_override = true;
 							const id = Number(link.url.match(/(?<=^note:Signed text - )\d{1,4}/g)[0]);
 							const mD = link.url.match(/(?<=^note:Signed text - \d{1,4}\|).+/g)[0];
 							try {
@@ -378,6 +383,7 @@
 								return;
 							};
 						} else if (link.url.match(/^note:Signed by .{1,30}\: [A-Za-z0-9\-_]{6}.+/g) !== null) {
+                            hashbrown_override = true;
 							user_name = link.url.match(/(?<=^note:Signed by ).{1,30}(?=\: [A-Za-z0-9\-_]{6}.+)/g)[0];
                             const dd = link.url.match(/(?<=^note:Signed by .{1,30}\: )[A-Za-z0-9\-_]{4}/g)[0];
 							let id = link.url.match(/(?<=^note:Signed by .{1,30}\: [A-Za-z0-9\-_]{4})[A-Za-z0-9\-_]{2}/g)[0];
@@ -391,11 +397,45 @@
 								meta_tmp[dd][id] = [];
 							}
 							meta_tmp[dd][id].push(mD);
-						}
+						} else if (link.url.match(/^note: User: .+? \| (?:Phrase: .+ \| )?Sig: (?:[a-zA-Z0-9\+\/=]{4})+(?: \| PubKey: (?:[a-zA-Z0-9\+\/=]{4})+)?$/g) !== null) {
+                            hashbrown = true;
+                            let user = link.url.match(/(?<=^note: User: ).+?(?= \| ((Sig: )|(Phrase: )))/g)[0];
+                            let signature = link.url.match(/(?<= \| Sig: )(?:[a-zA-Z0-9\+\/=]{4})+/g)[0];
+                            let phrase_tmp = link.url.match(/(?<=^note: User: .+? \| Phrase: ).+(?= \| Sig: )/g);
+                            let phrase = phrase_tmp !== null ? phrase_tmp[0] : unsafeWindow.getCharInfoXY(x, y).char;
+                            let pubkey_tmp = link.url.match(/(?<=^note: User: .+? \| (?:Phrase: .+ \| )?Sig: (?:[a-zA-Z0-9\+\/=]{4})+ \| PubKey: )([a-zA-Z0-9\+\/=]{4})+$/g);
+                            let pubkey = pubkey_tmp === null ? null : pubkey_tmp[0];
+                            hashbrown_meta.push({type: 'note', textType: phrase_tmp === null ? 'char' : 'phrase', user, signature, phrase, pubkey, realX: x, realY: y});
+                        } else if (link.url.match(/^javascript:\/\*\r?\nUser: .+\r?\n(Phrase: .+\r?\n)?Sig: ([a-zA-Z0-9\+\/=]{4})+\r?\nPubKey: ([a-zA-Z0-9\+\/=]{4})+\r?\n\*\/$/g) !== null) {
+                            hashbrown = true;
+                            let user = link.url.match(/(?<=^javascript:\/\*\r?\nUser: ).+/g)[0];
+                            let signature = link.url.match(/(?<=^javascript:\/\*\r?\nUser: .+\r?\n(Phrase: .+\r?\n)?Sig: )([a-zA-Z0-9\/\+=]{4})+/g)[0];
+                            let phrase_tmp = link.url.match(/(?<=^javascript:\/\*\r?\nUser: .+\r?\nPhrase: ).+/g);
+                            let phrase = phrase_tmp !== null ? phrase_tmp[0] : unsafeWindow.getCharInfoXY(x, y).char;
+                            let pubkey = link.url.match(/(?<=^javascript:\/\*\r?\nUser: .+\r?\n(Phrase: .+\r?\n)?Sig: ([a-zA-Z0-9\/\+=]{4})+\r?\nPubKey: )([a-zA-Z0-9\/\+=]{4})+/g)[0];
+                            hashbrown_meta.push({type: 'note', textType: phrase_tmp === null ? 'char' : 'phrase', user, signature, phrase, pubkey, realX: x, realY: y});
+                        } else if (link.url.match(/^https?:\/\/.+\/verifyhash\.html\?/g) !== null) {
+                            hashbrown = true;
+                            let params = new URLSearchParams((new URL(link.url)).search);
+                            let world = params.get('w');
+                            let xPos = params.get('x');
+                            let yPos = params.get('y');
+                            let user = params.get('u');
+                            let signature = params.get('sig');
+                            let pubkey = params.get('pub');
+                            let charcode = params.get('c');
+                            let decorations = params.get('d');
+                            let text = params.get('t');
+                            hashbrown_meta.push({type: 'url', textType: text === null ? 'char' : 'phrase', user, signature, pubkey, world, x: xPos, y: yPos, realX: x, realY: y, charcode, decorations, text});
+                        }
+                    }
+                    if (!hashbrown_override) {
+                        hashbrown_text.push({char: unsafeWindow.getCharInfoXY(x, y).char, realX: x, realY: y});
                     }
                 }
             }
 			if (legacy) {
+                hashbrown_text = null;
 				for (let i = 0; i < 3; i++) {
 					let str = '';
 					for (let k in meta_tmp) {
@@ -413,7 +453,8 @@
 						continue;
 					};
 				}
-			} else {
+			} else if (!hashbrown) {
+                hashbrown_text = null;
 				if (Object.keys(meta_tmp).length > 1) {
 					div4.querySelector('#status_verify').innerHTML = `<br><div><b>Verification failed: </b>More than one text signature found (please select only one).</div>`;
 					ui.open();
@@ -446,62 +487,282 @@
 				}
 			}
 
-            if (meta === null) {
-				div4.querySelector('#status_verify').innerHTML = `<br><div><b>Verification failed: </b>Could not parse signed text.</div>`;
-                ui.open();
-                return;
-            }
+            if (!hashbrown) {
+                if (meta === null) {
+                    div4.querySelector('#status_verify').innerHTML = `<br><div><b>Verification failed: </b>Could not parse signed text.</div>`;
+                    ui.open();
+                    return;
+                }
 
-            let hash = meta.h;
-            let signature = meta.s;
-            let text = meta.t;
-            let username = meta.u;
-			let timestamp = meta.d ?? null;
-			let signedVer = meta.v ?? '0.0.0';
+                let hash = meta.h;
+                let signature = meta.s;
+                let text = meta.t;
+                let username = meta.u;
+                let timestamp = meta.d ?? null;
+                let signedVer = meta.v ?? '0.0.0';
 
-			let scriptVersion = parseSemanticVersion(VERSION);
-			let signedVersion = parseSemanticVersion(signedVer);
-			if (signedVersion.major > scriptVersion.major) {
-				div4.querySelector('#status_verify').innerHTML = `<br><div><b>Verification failed: </b>Unsupported version (signed for v${signedVer} but you are running v${VERSION}).</div>`;
-			}
+                let scriptVersion = parseSemanticVersion(VERSION);
+                let signedVersion = parseSemanticVersion(signedVer);
+                if (signedVersion.major > scriptVersion.major) {
+                    div4.querySelector('#status_verify').innerHTML = `<br><div><b>Verification failed: </b>Unsupported version (signed for v${signedVer} but you are running v${VERSION}).</div>`;
+                }
 
-            try {
-                const keyDb = keys.split('\n').map(a=>JSON.parse(a));
-                div4.querySelector('#text_verify').value = text;
-                div4.querySelector('#signature_verify').value = signature;
-                div4.querySelector('#hash_verify').value = hash;
-                const txt_hash = await hash_text(text);
-                let match = null;
-                let user_found = false;
-                if (keyDb.length > 0) {
-                    for (let i of keyDb) {
-                        if (await verify_text(text, signature, i.key)) {
-                            match = i.user;
+                try {
+                    const keyDb = keys.split('\n').map(a=>JSON.parse(a));
+                    div4.querySelector('#text_verify').value = text;
+                    div4.querySelector('#signature_verify').value = signature;
+                    div4.querySelector('#hash_verify').value = hash;
+                    const txt_hash = await hash_text(text);
+                    let match = null;
+                    let user_found = false;
+                    if (keyDb.length > 0) {
+                        for (let i of keyDb) {
+                            if (await verify_text(text, signature, i.key)) {
+                                match = i.user;
+                            }
+                            if (i.user === username) {
+                                user_found = true;
+                            }
                         }
-                        if (i.user === username) {
-                            user_found = true;
+                    }
+                    if (hash !== txt_hash) {
+                        div4.querySelector('#status_verify').innerHTML = `<br><div><b>Verification failed: </b>Hash does not match (text may have been modified)${match === null ? '; integrity check failed (invalid signature)' : ''}.</div>`;
+                    } else if (keyDb.length === 0) {
+                        div4.querySelector('#status_verify').innerHTML = `<br><div><b>Verification failed: </b>No public keys found.</div>`;
+                    } else if (match === null && !user_found) {
+                        div4.querySelector('#status_verify').innerHTML = `<br><div><b>Verification failed: </b>Integrity check failed (User "<b>${username}</b>" not recognized, try updating the database via <i>Options -> Update database</i>).</div>`;
+                    } else if (match === null && user_found) {
+                        div4.querySelector('#status_verify').innerHTML = `<br><div><b>Verification failed: </b>Integrity check failed (invalid signature)</div>`;
+                    } else if (match !== null && match !== username) {
+                        div4.querySelector('#status_verify').innerHTML = `<br><div><b>Verification failed: </b>Text signed for "<b>${username}</b>" but validated as "<b>${match}</b>" (impersonation likely).</div>`;
+                        console.log(username, match, username === match);
+                    } else {
+                        let dateObj = new Date(timestamp ?? 0);
+                        let dateStr = timestamp !== null ? ` on ${dateObj.getFullYear()}-${dateObj.getMonth()}-${dateObj.getDate()} at ${dateObj.getHours()}:${String(dateObj.getMinutes()).padStart(2, '0')}` : '';
+                        div4.querySelector('#status_verify').innerHTML = `<br><div>Text is <b>valid</b> (signed by <b>${match}</b>${dateStr}).</div>`;
+                    }
+                } catch (e) {
+                    div4.querySelector('#status_verify').innerHTML = `<br><div><b>Unexpected error:</b> ${e.name}: ${e.message}${'stack' in e ? '<br><b>Stack trace:</b> ' + e.stack : ''}</div>`;
+                }
+                ui.open();
+            } else {
+                div4.querySelectorAll('.manual_entry').forEach(a=>{a.removeAttribute('style')});
+                let txt = [];
+                let xy = [];
+                let startY = hashbrown_text[0].realY;
+                for (let i = 0; i < hashbrown_text.length; i++) {
+                    let y = hashbrown_text[i].realY;
+                    let idx = y - startY;
+                    if (!(idx in txt)) {
+                        txt[idx] = '';
+                        xy[idx] = [];
+                    }
+                    txt[idx] += hashbrown_text[i].char;
+                    xy[idx].push([hashbrown_text[i].realX, hashbrown_text[i].realY]);
+                }
+                for (let i = 0; i < txt.length; i++) {
+                    let startPad = (txt[i].match(/^\s+/g) ?? [''])[0].length;
+                    let endPad = (txt[i].match(/\s+$/g) ?? [''])[0].length;
+                    txt[i] = [...txt[i]].slice(startPad, txt[i].length - endPad);
+                    xy[i] = xy[i].slice(startPad, xy[i].length - endPad);
+                }
+                let firstNotEmpty = 0, lastNotEmpty = 0;
+                for (let i = 0; i < txt.length; i++) {
+                    if (txt[i].length > 0) {
+                        firstNotEmpty = i;
+                        break;
+                    }
+                }
+                for (let i = txt.length - 1; i >= 0; i--) {
+                    if (txt[i].length > 0) {
+                        lastNotEmpty = i;
+                        break;
+                    }
+                }
+                txt = txt.slice(firstNotEmpty, lastNotEmpty + 1);
+                xy = xy.slice(firstNotEmpty, lastNotEmpty + 1);
+                for (let i = 0; i < txt.length; i++) {
+                    for (let k = 0; k < txt[i].length; k++) {
+                        let coord = xy[i][k];
+                        let filtered = hashbrown_meta.find(a=>a.realX===coord[0]&&a.realY===coord[1]);
+                        if (filtered !== undefined) {
+                            txt[i][k] = {char: txt[i][k], meta: filtered};
+                        } else {
+                            txt[i][k] = {char: txt[i][k], meta: null};
                         }
                     }
                 }
-                if (hash !== txt_hash) {
-                    div4.querySelector('#status_verify').innerHTML = `<br><div><b>Verification failed: </b>Hash does not match (text may have been modified)${match === null ? '; integrity check failed (invalid signature)' : ''}.</div>`;
-                } else if (keyDb.length === 0) {
-                    div4.querySelector('#status_verify').innerHTML = `<br><div><b>Verification failed: </b>No public keys found.</div>`;
-                } else if (match === null && !user_found) {
-                    div4.querySelector('#status_verify').innerHTML = `<br><div><b>Verification failed: </b>Integrity check failed (User "<b>${username}</b>" not recognized, try updating the database via <i>Options -> Update database</i>).</div>`;
-                } else if (match === null && user_found) {
-                    div4.querySelector('#status_verify').innerHTML = `<br><div><b>Verification failed: </b>Integrity check failed (invalid signature)</div>`;
-                } else if (match !== null && match !== username) {
-                    div4.querySelector('#status_verify').innerHTML = `<br><div><b>Verification failed: </b>Text signed for "<b>${username}</b>" but validated as "<b>${match}</b>" (impersonation likely).</div>`;
-                } else {
-					let dateObj = new Date(timestamp ?? 0);
-					let dateStr = timestamp !== null ? ` on ${dateObj.getFullYear()}-${dateObj.getMonth()}-${dateObj.getDate()} at ${dateObj.getHours()}:${String(dateObj.getMinutes()).padStart(2, '0')}` : '';
-                    div4.querySelector('#status_verify').innerHTML = `<br><div>Text is <b>valid</b> (signed by <b>${match}</b>${dateStr}).</div>`;
+                xy = null;
+                let html = document.createElement('code');
+                html.style = `display: block; width: 100%; box-sizing: border-box; background-color: #f5f5ff; color: #000000; padding: 0.35em 0.6em; outline: 1px solid #999; font-family: monospace; overflow: scroll; white-space: pre;`;
+                for (let i = 0; i < txt.length; i++) {
+                    for (let k = 0; k < txt[i].length; k++) {
+                        if (txt[i][k].meta !== null) {
+                            let m = txt[i][k].meta;
+                            if (m.type === 'url') {
+                                if (typeof m.pubkey === 'string' && typeof m.signature === 'string' && typeof m.user === 'string' && typeof m.world === 'string' && typeof m.x === 'string' && typeof m.y === 'string') {
+                                    let world = unsafeWindow.state.worldModel.name || "Main";
+                                    if (world !== m.world) {
+                                        m.error = 'World does not match'; continue;
+                                    }
+                                    if (m.textType === 'char') {
+                                        if (typeof m.charcode === 'string' && typeof m.decorations === 'string') {
+                                            if (Number(m.x) !== m.realX || Number(m.y) !== m.realY) {
+                                                m.error = 'Coordinates do not match'; continue;
+                                            }
+                                            let char = String.fromCodePoint(Number(m.charcode));
+                                            if (char !== unsafeWindow.getCharInfoXY(m.realX, m.realY).char) {
+                                                m.error = 'Text does not match'; continue;
+                                            }
+                                            try {
+                                                let key = new Uint8Array(atob(m.pubkey).split('').map(a=>a.codePointAt(0)));
+                                                let sig = new Uint8Array(atob(m.signature).split('').map(a=>a.codePointAt(0)));
+                                                let txt = (new TextEncoder()).encode(`${m.world},${m.x},${m.y},${m.charcode},${m.decorations},${m.user}`);
+                                                let pubKey = await s.importKey('raw', key, {name: "ECDSA", namedCurve: "P-256"}, false, ["verify"]);
+                                                let isValid = await s.verify({name: "ECDSA", hash: "SHA-256"}, pubKey, sig, txt);
+                                                if (!isValid) {
+                                                    m.error = 'Invalid signature'; continue;
+                                                }
+                                                m.message = `Signature is valid\nUsername: ${m.user}\nKey: ${m.pubkey}`;
+                                            } catch (e) {
+                                                m.error = `Could not verify text: ${e}`; continue;
+                                            }
+                                        } else {
+                                            m.error = 'Missing required values in URL'; continue;
+                                        }
+                                    } else {
+                                        if (typeof m.text === 'string') {
+                                            if (Number(m.y) !== m.realY) {
+                                                m.error = 'Coordinates do not match'; continue;
+                                            }
+                                            try {
+                                                let key = new Uint8Array(atob(m.pubkey).split('').map(a=>a.codePointAt(0)));
+                                                let sig = new Uint8Array(atob(m.signature).split('').map(a=>a.codePointAt(0)));
+                                                let idx = Math.abs(Number(m.x) - m.realX);
+                                                if (m.text[idx] !== unsafeWindow.getCharInfoXY(m.realX, m.realY).char) {
+                                                    m.error = 'Text does not match'; continue;
+                                                }
+                                                let txt = (new TextEncoder()).encode(`${m.world},${m.x},${m.y},${m.text},${m.user}`);
+                                                let pubKey = await s.importKey('raw', key, {name: "ECDSA", namedCurve: "P-256"}, false, ["verify"]);
+                                                let isValid = await s.verify({name: "ECDSA", hash: "SHA-256"}, pubKey, sig, txt);
+                                                if (!isValid) {
+                                                    m.error = 'Invalid signature'; continue;
+                                                }
+                                                m.message = `Signature is valid\nUsername: ${m.user}\nOriginal text: ${m.text}\nKey: ${m.pubkey}`;
+                                            } catch (e) {
+                                                m.error = `Could not verify text: ${e}`; continue;
+                                            }
+                                        } else {
+                                            m.error = 'Missing required values in URL'; continue;
+                                        }
+                                    }
+                                } else {
+                                    m.error = 'Missing required values in URL'; continue;
+                                }
+                            } else if (m.type === 'note') {
+                                if (typeof m.phrase === "string" && typeof m.pubkey === "string" && typeof m.signature === "string") {
+                                    if (m.textType === 'char') {
+                                        let char = unsafeWindow.getCharInfoXY(m.realX, m.realY);
+                                        let charcode = char.char.codePointAt(0);
+                                        let d_t = char.decoration;
+                                        let deco = d_t !== null ? parseInt([d_t.bold, d_t.italic, d_t.under, d_t.strike].map(a=>Number(a)).join(''), 2) : 0;
+                                        let user = m.user;
+                                        try {
+                                            let key = new Uint8Array(atob(m.pubkey).split('').map(a=>a.codePointAt(0)));
+                                            let sig = new Uint8Array(atob(m.signature).split('').map(a=>a.codePointAt(0)));
+                                            let txt = (new TextEncoder()).encode(`${unsafeWindow.state.worldModel.name || "Main"},${m.realX},${m.realY},${charcode},${deco},${user}`);
+                                            let pubKey = await s.importKey('raw', key, {name: "ECDSA", namedCurve: "P-256"}, false, ["verify"]);
+                                            let isValid = await s.verify({name: "ECDSA", hash: "SHA-256"}, pubKey, sig, txt);
+                                            if (!isValid) {
+                                                m.error = `Invalid signature (data may be incorrect)`; continue;
+                                            }
+                                            m.message = `Signature is valid\nUsername: ${m.user}\nKey: ${m.pubkey}`;
+                                        } catch (e) {
+                                            m.error = `Could not verify text: ${e}`; continue;
+                                        }
+                                    } else {
+                                        let isValid = false;
+                                        let error = null;
+                                        let min = m.realX - (m.phrase.length - 1), max = m.realX + (m.phrase.length - 1);
+                                        for (let z = min; z <= max; z++) {
+                                            try {
+                                                let key = new Uint8Array(atob(m.pubkey).split('').map(a=>a.codePointAt(0)));
+                                                let sig = new Uint8Array(atob(m.signature).split('').map(a=>a.codePointAt(0)));
+                                                let txt = (new TextEncoder()).encode(`${unsafeWindow.state.worldModel.name || "Main"},${z},${m.realY},${m.phrase},${m.user}`);
+                                                let pubKey = await s.importKey('raw', key, {name: "ECDSA", namedCurve: "P-256"}, false, ["verify"]);
+                                                let val = await s.verify({name: "ECDSA", hash: "SHA-256"}, pubKey, sig, txt);
+                                                if (val) {
+                                                    isValid = true;
+                                                    error = null;
+                                                    break;
+                                                }
+                                            } catch (e) {
+                                                error = `Could not verify text: ${e}`; continue;
+                                            }
+                                        }
+                                        if (isValid) {
+                                            m.message = `Signature is valid\nUsername: ${m.user}\nOriginal text: ${m.phrase}\nKey: ${m.pubkey}`;
+                                        } else if (error !== null) {
+                                            m.error = error; continue;
+                                        } else {
+                                            m.error = `Invalid signature (data may be incorrect)`; continue;
+                                        }
+                                    }
+                                } else if (m.pubkey === null) {
+                                     m.error = 'Missing public key'; continue;
+                                } else {
+                                     m.error = 'Missing required values in note'; continue;
+                                }
+                            }
+                        }
+                    }
                 }
-            } catch (e) {
-                div4.querySelector('#status_verify').innerHTML = `<br><div><b>Unexpected error:</b> ${e.name}: ${e.message}${'stack' in e ? '<br><b>Stack trace:</b> ' + e.stack : ''}</div>`;
+                let used_colors = [];
+                for (let i = 0; i < txt.length; i++) {
+                    for (let k = 0; k < txt[i].length; k++) {
+                        let elem = document.createElement('a');
+                        elem.innerText = txt[i][k].char;
+                        if (txt[i][k].meta !== null) {
+                            if ('error' in txt[i][k].meta) {
+                                if (txt[i][k].meta.error.startsWith('Invalid signature')) {
+                                    elem.style.color = '#ee7000';
+                                    elem.style.textDecoration = 'underline dotted';
+                                    elem.style.textDecorationColor = '#7f0000';
+                                    elem.title = 'Error: ' + txt[i][k].meta.error;
+                                } else {
+                                    elem.style.color = '#7f0000';
+                                    elem.style.textDecoration = 'underline dotted';
+                                    elem.style.textDecorationColor = '#7f0000';
+                                    elem.title = 'Error: ' + txt[i][k].meta.error;
+                                }
+                            } else {
+                                elem.style.color = '#007f00';
+                                elem.style.textDecoration = 'underline dotted';
+                                elem.style.textDecorationColor = '#007f00';
+                                elem.title = txt[i][k].meta.message;
+                            }
+                        }
+                        html.appendChild(elem);
+                    }
+                    if (i !== txt.length - 1) {
+                        let br = document.createElement('br');
+                        html.appendChild(br);
+                    }
+                }
+                let tmpModal = new unsafeWindow.Modal();
+                tmpModal.setMinimumSize(350, 10);
+                tmpModal.setMaximumSize(500, 350);
+                tmpModal.createForm();
+                tmpModal.client.insertBefore(html, tmpModal.client.children[0]);
+                let tmpDiv = document.createElement('div');
+                tmpDiv.innerHTML = '<br style="display: block; margin: 4px 0;"><b>Color reference:</b><br><a style="color: #007f00">Green</a> = Valid signature*<br><a style="color: #ee7000">Orange</a> = Invalid signature<br><a style="color: #7f0000">Red</a> = Errors<br>Black = Unsigned text<br><a style="font-size: 12px; color: #555">* Due to HashBrown design limitations, you <b>must</b> verify that the public key is correct.</a><br><br style="display: block; margin: 4px 0;"><hr><br style="display: block; margin: 4px 0;">';
+                let tmpDiv2 = document.createElement('div');
+                tmpDiv2.innerHTML = 'Hover over underlined text for detailed info:<br>';
+                tmpModal.client.insertBefore(tmpDiv, tmpModal.client.children[1]);
+                tmpModal.client.insertBefore(tmpDiv2, html);
+                tmpModal.client.style.overflow = 'scroll';
+                tmpModal.open();
             }
-            ui.open();
         });
         verifySelection.startSelection();
     }
