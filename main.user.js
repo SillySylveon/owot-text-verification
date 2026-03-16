@@ -538,7 +538,7 @@
                         console.log(username, match, username === match);
                     } else {
                         let dateObj = new Date(timestamp ?? 0);
-                        let dateStr = timestamp !== null ? ` on ${dateObj.getFullYear()}-${dateObj.getMonth()}-${dateObj.getDate()} at ${dateObj.getHours()}:${String(dateObj.getMinutes()).padStart(2, '0')}` : '';
+                        let dateStr = timestamp !== null ? ` on ${dateObj.getFullYear()}-${dateObj.getMonth() + 1}-${dateObj.getDate()} at ${dateObj.getHours()}:${String(dateObj.getMinutes()).padStart(2, '0')}` : '';
                         div4.querySelector('#status_verify').innerHTML = `<br><div>Text is <b>valid</b> (signed by <b>${match}</b>${dateStr}).</div>`;
                     }
                 } catch (e) {
