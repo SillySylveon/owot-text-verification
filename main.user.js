@@ -494,7 +494,6 @@
                 }
                 txt = txt.slice(firstNotEmpty, lastNotEmpty + 1);
                 xy = xy.slice(firstNotEmpty, lastNotEmpty + 1);
-                console.log(JSON.parse(JSON.stringify(xy)), JSON.parse(JSON.stringify(txt)));
                 for (let i = 0; i < txt.length; i++) {
                     for (let k = 0; k < txt[i].length; k++) {
                         let coord = xy[i][k];
@@ -684,7 +683,6 @@
                                             let pubKey = await s.importKey('raw', key, {name: "ECDSA", namedCurve: "P-256"}, false, ["verify"]);
                                             let isValid = await s.verify({name: "ECDSA", hash: "SHA-256"}, pubKey, sig, txt);
                                             if (!isValid) {
-                                                console.log(txt);
                                                 m.error = `Invalid signature (data may be incorrect)`; continue;
                                             }
                                             m.message = `Signature is valid\nUsername: ${m.user}\nKey: ${m.pubkey}`;
@@ -743,7 +741,6 @@
                 coordTmp = null;
                 for (let i = 0; i < txt.length; i++) {
                     for (let k = 0; k < txt[i].length; k++) {
-                        console.log(txt[i][k]);
                         const key = txt[i][k].xy.join(',');
                         if (key in newObj) {
                             txt[i][k].meta = newObj[key];
