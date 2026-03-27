@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OWOT Text Signatures
 // @namespace    https://ourworldoftext.com/
-// @version      1.2.0
+// @version      1.2.1
 // @description  Sign and verify text written on the canvas.
 // @author       You
 // @match        http*://ourworldoftext.com/*
@@ -14,7 +14,7 @@
 (async function() {
     'use strict';
 
-    var VERSION = '1.2.0';
+    var VERSION = '1.2.1';
 
     if (typeof GM_getValue === "undefined") {
         alert('This script must be executed with a userscript manager (e.g. Tampermonkey).');
@@ -435,15 +435,20 @@
 				for (let i = 0; i < 3; i++) {
 					let str = '';
 					for (let k in meta_tmp) {
-                        if (typeof meta_tmp[k] !== 'string') {
-                            div4.querySelector('#status_verify').innerHTML = `<br><div><b>Verification failed: </b>Signed text found for varying versions</div>`;
+                        for (let l in meta_tmp[k]) {
+                            if (typeof meta_tmp[k][l] !== 'string') {
+                                div4.querySelector('#status_verify').innerHTML = `<br><div><b>Verification failed: </b>Signed text found for varying versions</div>`;
+                                ui.open();
+                                return;
+                            }
                         }
 						const val = meta_tmp[k];
 						str += val[Math.floor(Math.random() * val.length)];
 					}
 					if (str.length === 0) {
 						div4.querySelector('#status_verify').innerHTML = `<br><div><b>Verification failed: </b>No signed text found!</div>`;
-						return;
+						ui.open();
+                        return;
 					}
 					try {
 						meta = JSON.parse(str);
@@ -452,6 +457,62 @@
 						continue;
 					};
 				}
+
+                if (meta === null) {
+                    div4.querySelector('#status_verify').innerHTML = `<br><div><b>Verification failed: </b>Could not parse signed text.</div>`;
+                    ui.open();
+                    return;
+                }
+
+                let hash = meta.h;
+                let signature = meta.s;
+                let text = meta.t;
+                let username = meta.u;
+
+                try {
+                    const keyDb = keys.split('\n').map(a=>JSON.parse(a));
+                    div4.querySelector('#text_verify').value = text;
+                    div4.querySelector('#signature_verify').value = signature;
+                    div4.querySelector('#hash_verify').value = hash;
+                    const txt_hash = await hash_text(text);
+                    let match = null;
+                    let user_found = false;
+                    if (keyDb.length > 0) {
+                        let filtered = keyDb.filter(a => a.user === username);
+                        if (filtered.length > 0) {
+                            for (let i of filtered) {
+                                if (await verify_text(text, signature, i.key)) {
+                                    match = i.user;
+                                    user_found = true;
+                                    break;
+                                }
+                            }
+                        } else {
+                            for (let i of filtered) {
+                                if (await verify_text(text, signature, i.key)) {
+                                    match = i.user;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    if (hash !== txt_hash) {
+                        div4.querySelector('#status_verify').innerHTML = `<br><div><b>Verification failed: </b>Hash does not match (text may have been modified)${match === null ? '; integrity check failed (invalid signature)' : ''}.</div>`;
+                    } else if (keyDb.length === 0) {
+                        div4.querySelector('#status_verify').innerHTML = `<br><div><b>Verification failed: </b>No public keys found.</div>`;
+                    } else if (match === null && !user_found) {
+                        div4.querySelector('#status_verify').innerHTML = `<br><div><b>Verification failed: </b>Integrity check failed (User "<b>${username}</b>" not recognized, try updating the database via <i>Options -> Update database</i>).</div>`;
+                    } else if (match === null && user_found) {
+                        div4.querySelector('#status_verify').innerHTML = `<br><div><b>Verification failed: </b>Integrity check failed (invalid signature)</div>`;
+                    } else if (match !== null && match !== username) {
+                        div4.querySelector('#status_verify').innerHTML = `<br><div><b>Verification failed: </b>Text signed for "<b>${username}</b>" but validated as "<b>${match}</b>" (impersonation likely).</div>`;
+                    } else {
+                        div4.querySelector('#status_verify').innerHTML = `<br><div>Text is <b>valid</b> (signed by <b>${match}</b>).</div>`;
+                    }
+                } catch (e) {
+                    div4.querySelector('#status_verify').innerHTML = `<br><div><b>Unexpected error:</b> ${e.name}: ${e.message}${'stack' in e ? '<br><b>Stack trace:</b> ' + e.stack : ''}</div>`;
+                }
+                ui.open();
 			} else {
                 let txt = [];
                 let xy = [];
@@ -518,6 +579,7 @@
                         let meta = null;
                         if (typeof meta_tmp[z] === 'string') {
                             div4.querySelector('#status_verify').innerHTML = `<br><div><b>Verification failed: </b>Signed text found for varying versions</div>`;
+                            ui.open();
                             return;
                         }
                         let coords_link = [];
@@ -573,12 +635,21 @@
                             let match = null;
                             let user_found = false;
                             if (keyDb.length > 0) {
-                                for (let i of keyDb) {
-                                    if (await verify_text(text, signature, i.key)) {
-                                        match = i.user;
+                                let filtered = keyDb.filter(a => a.user === username);
+                                if (filtered.length > 0) {
+                                    for (let i of filtered) {
+                                        if (await verify_text(text, signature, i.key)) {
+                                            match = i.user;
+                                            user_found = true;
+                                            break;
+                                        }
                                     }
-                                    if (i.user === username) {
-                                        user_found = true;
+                                } else {
+                                    for (let i of filtered) {
+                                        if (await verify_text(text, signature, i.key)) {
+                                            match = i.user;
+                                            break;
+                                        }
                                     }
                                 }
                             }
